@@ -14,14 +14,15 @@ jobs:
   zap_scan:
     runs-on: ubuntu-latest
     steps:
+
       - name: Checkout Repository
-        uses: actions/checkout@v4  # Use latest version
+        uses: actions/checkout@v4  # Latest version
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-  
+
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt  # Ensure all dependencies are installed
@@ -31,18 +32,21 @@ jobs:
           nohup python app.py &  # Start Flask app in background
           sleep 15  # Wait for app to start
 
-      # Install OWASP ZAP Using Snap
-      - name: Install OWASP ZAP
+      - name: Authenticate to Docker Hub
         run: |
-          sudo apt update
-          sudo snap install zaproxy  # Install OWASP ZAP via Snap
+          echo "${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
 
-      # Run OWASP ZAP Scan using CLI
+      - name: Install OWASP ZAP Manually
+        run: |
+          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
+          tar -xvzf ZAP_2.14.0_Linux.tar.gz
+          mv ZAP_2.14.0 zaproxy
+          chmod +x zaproxy/zap.sh
+
       - name: Run OWASP ZAP Scan
         run: |
-          zaproxy -cmd -quickurl http://127.0.0.1:5000 -quickout ~/zap_report.html
+          ./zaproxy/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout ~/zap_report.html
 
-      # Upload ZAP Scan Report
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
