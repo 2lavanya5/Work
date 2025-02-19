@@ -21,15 +21,22 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-  
+
       - name: Install Dependencies
         run: |
-          pip install -r requirements.txt  # Ensure all dependencies are installed
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else echo "No requirements.txt found"; fi
 
       - name: Start Flask App
         run: |
           nohup python app.py &  # Start Flask app in background
-          sleep 15  # Wait for app to start
+          sleep 20  # Wait for app to start
+
+      - name: Authenticate to Docker Hub (if needed)
+        run: |
+          echo "${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
+
+      - name: Pull OWASP ZAP Docker Image
+        run: sudo docker pull owasp/zap2docker-stable
 
       - name: Run OWASP ZAP Scan
         uses: zaproxy/action-full-scan@v0.4.0
@@ -40,4 +47,4 @@ jobs:
         uses: actions/upload-artifact@v4  # Updated to v4
         with:
           name: zap-report
-          path: report.html
+          path: report_html.html  # Ensure the correct file path
