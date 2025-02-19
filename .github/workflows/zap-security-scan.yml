@@ -32,18 +32,22 @@ jobs:
           nohup python app.py &  # Start Flask app in background
           sleep 15  # Wait for app to start
 
-      - name: Install OWASP ZAP CLI (No Docker)
+      - name: Install OWASP ZAP Manually
         run: |
           sudo apt update
-          sudo apt install zaproxy -y  # Install ZAP CLI without Docker
+          sudo apt install -y wget
+          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
+          tar -xvzf ZAP_2.14.0_Linux.tar.gz
+          mv ZAP_2.14.0 zaproxy  # Rename for easier access
+          echo "ZAP installed successfully"
 
       - name: Run OWASP ZAP CLI Scan
         run: |
-          zap-cli start  # Start ZAP CLI
-          zap-cli open-url http://127.0.0.1:5000  # Scan your Flask app
-          zap-cli spider http://127.0.0.1:5000  # Spider the application
-          zap-cli active-scan http://127.0.0.1:5000  # Run active scan
-          zap-cli report -o zap_report.html -f html  # Generate a report
+          cd zaproxy  # Move to ZAP directory
+          ./zap.sh -daemon -port 8090 &  # Start ZAP in daemon mode
+          sleep 10  # Wait for ZAP to start
+          ./zap-cli quick-scan --self-contained --start-options "-config api.disablekey=true" http://127.0.0.1:5000
+          ./zap-cli report -o ../zap_report.html -f html  # Generate a report
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
