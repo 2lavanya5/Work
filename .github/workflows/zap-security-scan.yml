@@ -32,14 +32,21 @@ jobs:
           nohup python app.py &  # Start Flask app in background
           sleep 15  # Wait for app to start
 
-      - name: Run OWASP ZAP Scan (No Docker)
-        uses: zaproxy/action-full-scan@v0.4.0
-        with:
-          target: 'http://127.0.0.1:5000'  # Your app URL
-          fail_action: false  # Prevent workflow from failing due to vulnerabilities
+      - name: Install OWASP ZAP CLI (No Docker)
+        run: |
+          sudo apt update
+          sudo apt install zaproxy -y  # Install ZAP CLI without Docker
+
+      - name: Run OWASP ZAP CLI Scan
+        run: |
+          zap-cli start  # Start ZAP CLI
+          zap-cli open-url http://127.0.0.1:5000  # Scan your Flask app
+          zap-cli spider http://127.0.0.1:5000  # Spider the application
+          zap-cli active-scan http://127.0.0.1:5000  # Run active scan
+          zap-cli report -o zap_report.html -f html  # Generate a report
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
           name: zap-report
-          path: report_html.html
+          path: zap_report.html
