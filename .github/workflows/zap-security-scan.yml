@@ -19,10 +19,10 @@ jobs:
       - name: Verify Template Structure
         run: |
           echo "Repository structure:"
-          tree -L 3
+          tree -I '*.pyc|__pycache__' -L 3  # Exclude compiled files
           
           echo -e "\nChecking required templates:"
-          required_templates=("home.html" "none.html")
+          required_templates=("home.html" "login.html" "register.html" "profile.html")
           for template in "${required_templates[@]}"; do
             if [ ! -f "templates/$template" ]; then
               echo "❌ Missing template: $template"
@@ -35,6 +35,11 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+
+      - name: Clean Python Cache
+        run: |
+          find . -type d -name "__pycache__" -exec rm -rf {} +
+          find . -type f -name "*.pyc" -delete
 
       - name: Install Dependencies
         run: |
