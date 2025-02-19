@@ -22,11 +22,6 @@ jobs:
           git config --local --unset-all http.https://github.com/.extraheader || :
           git submodule foreach --recursive 'git config --local --unset-all core.sshCommand || :'
 
-      - name: Verify Template Structure
-        run: |
-          echo "🔍 Verifying repository structure..."
-          # Add your template verification logic here
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -39,9 +34,7 @@ jobs:
 
       - name: Start Flask App
         run: |
-          echo "🚀 Starting Flask application..."
           nohup gunicorn --bind 0.0.0.0:5000 app:app > flask.log 2>&1 &
-          echo "⏳ Waiting for app startup..."
           timeout 60 bash -c 'while ! nc -z 127.0.0.1 5000; do sleep 2; done'
 
       - name: Download OWASP ZAP
