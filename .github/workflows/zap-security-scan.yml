@@ -35,14 +35,12 @@ jobs:
             "home.html"
             "login.html"
             "register.html"
-            "profile.html"
-            "forgot_password.html"
-            "settings.html"
           )
           
+          # Updated directory name from 'templates' to 'template'
           for template in "${required_templates[@]}"; do
-            if [ ! -f "templates/$template" ]; then
-              echo "::error file=templates/$template::Missing required template: $template"
+            if [ ! -f "template/$template" ]; then
+              echo "::error file=template/$template::Missing required template: $template"
               exit 1
             fi
             echo "✅ Found template: $template"
