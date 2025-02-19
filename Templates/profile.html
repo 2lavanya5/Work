@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>Profile</h2>
+    <form method="POST">
+        {{ form.hidden_tag() }}  <!-- CSRF Protection -->
+
+        <div class="mb-3">
+            {{ form.username.label }} {{ form.username(class="form-control", value=user.username) }}
+        </div>
+        
+        <div class="mb-3">
+            {{ form.email.label }} {{ form.email(class="form-control", value=user.email) }}
+        </div>
+
+        <div class="mb-3">
+            {{ form.password.label }} {{ form.password(class="form-control") }}
+            <small class="text-muted">Leave blank to keep current password.</small>
+        </div>
+
+        <button type="submit" class="btn btn-primary">{{ form.submit.label }}</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container text-center mt-5">
+    <h2>Welcome, {{ user.username }}!</h2>
+    <p>Your secure dashboard is here. More features coming soon!</p>
+
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="card shadow-lg">
+                <div class="card-body">
+                    <h5>Profile</h5>
+                    <p>View and edit your profile.</p>
+                    <a href="{{ url_for('profile') }}" class="btn btn-primary">Go to Profile</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-lg">
+                <div class="card-body">
+                    <h5>Settings</h5>
+                    <p>Change account settings.</p>
+                    <a href="{{ url_for('settings') }}" class="btn btn-warning">Settings</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-lg">
+                <div class="card-body">
+                    <h5>Logout</h5>
+                    <p>Sign out of your account.</p>
+                    <a href="{{ url_for('logout') }}" class="btn btn-danger">Logout</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
