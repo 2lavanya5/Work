@@ -5,8 +5,6 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  schedule:
-    - cron: '0 * * * *'
 
 jobs:
   zap_scan:
@@ -24,20 +22,27 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
-          pip install gunicorn  # Add production server
+          pip install gunicorn
 
       - name: Install Java
-        run: sudo apt-get install -y openjdk-17-jdk  # Use newer Java version
+        run: sudo apt-get install -y openjdk-17-jdk
 
       - name: Start Flask App
         run: |
           echo "Starting Flask application..."
-          nohup gunicorn --bind 0.0.0.0:5000 app:app > flask.log 2>&1 &
+          nohup gunicorn --bind 0.0.0.0:5000 --access-logfile gunicorn.log app:app > flask.log 2>&1 &
           
           echo "Waiting for app to start..."
-          timeout 120 bash -c 'until curl -sSf http://127.0.0.1:5000 >/dev/null; do sleep 2; done'
+          timeout 120 bash -c '
+            while ! nc -z 127.0.0.1 5000;
+            do 
+              sleep 2
+              echo "Waiting for port 5000..."
+            done'
           
-          echo "App startup log:"
+          echo "App status check:"
+          curl -v http://127.0.0.1:5000
+          echo -e "\nApp logs:"
           cat flask.log
 
       - name: Download OWASP ZAP
@@ -50,7 +55,6 @@ jobs:
       - name: Run ZAP Scan
         run: |
           zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html
-          echo "Scan completed with status code $?"
 
       - name: Upload Reports
         uses: actions/upload-artifact@v4
@@ -59,3 +63,4 @@ jobs:
           path: |
             zap_report.html
             flask.log
+            gunicorn.log
