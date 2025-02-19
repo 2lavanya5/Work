@@ -2,13 +2,11 @@ name: OWASP ZAP Security Scan
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   schedule:
-    - cron: '0 * * * *'  # Runs every hour
+    - cron: '0 * * * *'
 
 jobs:
   zap_scan:
@@ -26,30 +24,38 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
+          pip install gunicorn  # Add production server
 
-      - name: Install Java (ZAP dependency)
-        run: sudo apt-get install -y openjdk-11-jdk  # ZAP requires Java
+      - name: Install Java
+        run: sudo apt-get install -y openjdk-17-jdk  # Use newer Java version
 
       - name: Start Flask App
         run: |
-          nohup python app.py > flask.log 2>&1 &  # Redirect output to a log file
-          echo "Waiting for Flask app to start..."
-          timeout 60 bash -c 'while ! curl -s http://127.0.0.1:5000 >/dev/null; do sleep 1; done'  # Wait up to 60s
+          echo "Starting Flask application..."
+          nohup gunicorn --bind 0.0.0.0:5000 app:app > flask.log 2>&1 &
+          
+          echo "Waiting for app to start..."
+          timeout 120 bash -c 'until curl -sSf http://127.0.0.1:5000 >/dev/null; do sleep 2; done'
+          
+          echo "App startup log:"
+          cat flask.log
 
       - name: Download OWASP ZAP
         run: |
           wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
           tar -xvf ZAP_2.14.0_Linux.tar.gz
           mv ZAP_2.14.0 zap
-          chmod +x zap/zap.sh  # Ensure execute permission
+          chmod +x zap/zap.sh
 
-      - name: Run OWASP ZAP CLI Scan
+      - name: Run ZAP Scan
         run: |
-          zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html -autorun /zap/wrk/automation_plan.yml
-          echo "ZAP Scan Completed"
+          zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html
+          echo "Scan completed with status code $?"
 
-      - name: Upload ZAP Report
+      - name: Upload Reports
         uses: actions/upload-artifact@v4
         with:
-          name: zap-report
-          path: zap_report.html
+          name: security-reports
+          path: |
+            zap_report.html
+            flask.log
