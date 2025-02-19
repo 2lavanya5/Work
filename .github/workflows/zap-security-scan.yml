@@ -19,13 +19,24 @@ jobs:
       - name: Verify Template Structure
         run: |
           echo "Repository structure:"
-          tree -I '*.pyc|__pycache__' -L 3  # Exclude compiled files
+          tree -I '*.pyc|__pycache__|*.db' -L 3
+          
+          echo -e "\nExisting templates:"
+          ls -l templates/
           
           echo -e "\nChecking required templates:"
-          required_templates=("home.html" "login.html" "register.html" "profile.html")
+          required_templates=(
+            "home.html"
+            "login.html"
+            "register.html"
+            "profile.html"
+            "forgot_password.html"
+            "settings.html"
+          )
+          
           for template in "${required_templates[@]}"; do
             if [ ! -f "templates/$template" ]; then
-              echo "❌ Missing template: $template"
+              echo "::error::Missing template: $template"
               exit 1
             fi
             echo "✔ Found template: $template"
