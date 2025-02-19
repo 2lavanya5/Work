@@ -31,19 +31,20 @@ jobs:
           nohup python app.py &  # Start Flask app in background
           sleep 15  # Wait for app to start
 
-      # Install OWASP ZAP CLI (instead of Docker)
-      - name: Install OWASP ZAP CLI
+      # Install OWASP ZAP Using Snap
+      - name: Install OWASP ZAP
         run: |
-          sudo apt update && sudo apt install zaproxy -y  # Install OWASP ZAP directly
+          sudo apt update
+          sudo snap install zaproxy  # Install OWASP ZAP via Snap
 
       # Run OWASP ZAP Scan using CLI
       - name: Run OWASP ZAP Scan
         run: |
-          zap-cli quick-scan --self-contained --start-options '-config api.disablekey=true' http://127.0.0.1:5000
+          zaproxy -cmd -quickurl http://127.0.0.1:5000 -quickout ~/zap_report.html
 
       # Upload ZAP Scan Report
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
           name: zap-report
-          path: ~/.ZAP/report.html
+          path: ~/zap_report.html
