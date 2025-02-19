@@ -13,6 +13,18 @@ jobs:
 
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git Safety
+        run: |
+          git config --global --add safe.directory /home/runner/work/work/work
+          git config --local --unset-all http.https://github.com/.extraheader || :
+
+      - name: Verify Template Structure
+        run: |
+          echo "Repository structure verification..."
+          # Your template verification logic here
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -26,22 +38,20 @@ jobs:
 
       - name: Start Flask App
         run: |
-          nohup python app.py & 
-          sleep 15
-
-      - name: Download OWASP ZAP
-        run: |
-          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
-          tar -xvf ZAP_2.14.0_Linux.tar.gz
-          mv ZAP_2.14.0 zap
-          chmod +x zap/zap.sh
+          nohup gunicorn --bind 0.0.0.0:5000 app:app > flask.log 2>&1 &
+          timeout 60 bash -c 'while ! curl -s http://127.0.0.1:5000 >/dev/null; do sleep 2; done'
 
       - name: Run ZAP Scan
         run: |
-          zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout report.html
+          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
+          tar -xvf ZAP_2.14.0_Linux.tar.gz
+          ./ZAP_2.14.0/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html
 
-      - name: Upload Report
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: zap-report
-          path: report.html
+          name: security-reports-${{ github.run_id }}
+          path: |
+            zap_report.html
+            flask.log
+          retention-days: 7
