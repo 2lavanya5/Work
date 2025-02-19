@@ -15,34 +15,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4  # Use the latest version
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
+  
       - name: Install Dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt  # Ensure all dependencies are installed
 
       - name: Start Flask App
         run: |
-          nohup python app.py &
+          nohup python app.py &  # Start Flask app in background
           sleep 15  # Wait for app to start
 
+      # Authenticate with Docker Hub before pulling ZAP image
       - name: Authenticate to Docker Hub
         run: echo "${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
 
+      # Pull the latest OWASP ZAP Docker image
       - name: Pull OWASP ZAP Docker Image
         run: docker pull owasp/zap2docker-stable
 
+      # Run OWASP ZAP Scan
       - name: Run OWASP ZAP Scan
         uses: zaproxy/action-full-scan@v0.4.0
         with:
           target: 'http://127.0.0.1:5000'  # Adjust to your app URL
 
       - name: Upload ZAP Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4  # Ensure latest upload version
         with:
           name: zap-report
           path: report.html
