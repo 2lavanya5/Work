@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '0 * * * *'  # Hourly scans
 
 jobs:
   zap_scan:
@@ -15,43 +17,114 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure Git Safety
         run: |
-          git config --global --add safe.directory /home/runner/work/work/work
-          git config --local --unset-all http.https://github.com/.extraheader || :
+          git config --global --add safe.directory /github/workspace
+          git config --local --unset-all core.sshCommand || :
           git submodule foreach --recursive 'git config --local --unset-all core.sshCommand || :'
 
-      - name: Set up Python
+      - name: Verify Template Structure
+        run: |
+          echo "🔍 Repository structure:"
+          tree -I '*.pyc|__pycache__|*.db' -L 3
+          
+          echo -e "\n📄 Checking templates:"
+          required_templates=(
+            "home.html"
+            "login.html"
+            "register.html"
+            "profile.html"
+            "forgot_password.html"
+            "settings.html"
+          )
+          
+          for template in "${required_templates[@]}"; do
+            if [ ! -f "templates/$template" ]; then
+              echo "::error file=templates/$template::Missing required template: $template"
+              exit 1
+            fi
+            echo "✅ Found template: $template"
+          done
+
+      - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
+      - name: Clean Python Cache
+        run: |
+          find . -type d -name "__pycache__" -exec rm -rf {} +
+          find . -type f -name "*.pyc" -delete
+
       - name: Install Dependencies
         run: |
+          pip install --upgrade pip
           pip install -r requirements.txt
           pip install gunicorn
 
-      - name: Start Flask App
+      - name: Install Java 17
+        run: sudo apt-get install -y openjdk-17-jdk
+
+      - name: Start Flask Application
         run: |
-          nohup gunicorn --bind 0.0.0.0:5000 app:app > flask.log 2>&1 &
-          timeout 60 bash -c 'while ! nc -z 127.0.0.1 5000; do sleep 2; done'
+          echo "🚀 Starting Flask app..."
+          nohup gunicorn --bind 0.0.0.0:5000 \
+            --access-logfile gunicorn-access.log \
+            --error-logfile gunicorn-error.log \
+            app:app > flask.log 2>&1 &
+          
+          echo "⏳ Waiting for app to start..."
+          timeout 120 bash -c '
+            while ! nc -z 127.0.0.1 5000; do
+              sleep 2
+              echo "⏱️ Waiting for port 5000..."
+            done'
+          
+          echo "🔗 Application status:"
+          curl -v http://127.0.0.1:5000
+          echo -e "\n📋 Startup logs:"
+          tail -n 50 flask.log
 
       - name: Download OWASP ZAP
         run: |
-          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
-          tar -xvf ZAP_2.14.0_Linux.tar.gz
+          wget -q https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
+          tar -xzf ZAP_2.14.0_Linux.tar.gz
           mv ZAP_2.14.0 zap
           chmod +x zap/zap.sh
 
-      - name: Run ZAP Scan
+      - name: Run Security Scan
         run: |
-          zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html
+          echo "🔎 Starting ZAP scan..."
+          zap/zap.sh -cmd \
+            -quickurl http://127.0.0.1:5000 \
+            -quickprogress \
+            -quickout zap-report.html
+          
+          echo "🔄 Converting report to PDF..."
+          zap/zap.sh -cmd -export_report zap-report.html zap-report.pdf
 
-      - name: Upload Artifacts
+      - name: Upload Security Reports
         uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
-            zap_report.html
+            zap-report.html
+            zap-report.pdf
+          retention-days: 7
+
+      - name: Upload Debug Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-logs
+          path: |
             flask.log
+            gunicorn-access.log
+            gunicorn-error.log
+          retention-days: 3
+
+      - name: Shutdown Application
+        run: |
+          echo "🛑 Stopping Flask app..."
+          pkill -f gunicorn
