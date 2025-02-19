@@ -14,14 +14,22 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Ensure templates are included
+          fetch-depth: 0
 
-      - name: Verify Templates
+      - name: Verify Template Structure
         run: |
-          if [ ! -f "templates/home.html" ]; then
-            echo "❌ Missing home.html template"
-            exit 1
-          fi
+          echo "Repository structure:"
+          tree -L 3
+          
+          echo -e "\nChecking required templates:"
+          required_templates=("home.html" "none.html")
+          for template in "${required_templates[@]}"; do
+            if [ ! -f "templates/$template" ]; then
+              echo "❌ Missing template: $template"
+              exit 1
+            fi
+            echo "✔ Found template: $template"
+          done
 
       - name: Set up Python
         uses: actions/setup-python@v4
