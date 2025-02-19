@@ -16,24 +16,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure Git Safety
+      - name: Fix Git Configuration
         run: |
-          # Correct safe directory configuration
-          git config --global --add safe.directory /home/runner/work/work/work
-          
-          # Clean up existing configurations
-          git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :
-          git submodule foreach --recursive 'git config --local --name-only --get-regexp "core\.sshCommand" && git config --local --unset-all "core.sshCommand" || :'
-          
-          # Handle HTTP headers cleanup
-          git config --local --name-only --get-regexp 'http\.https:\/\/github\.com\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :
+          # Correct safe directory path
+          git config --global --add safe.directory /home/runner/work/Work/Work
+          # Clean invalid configurations
+          git config --local --unset-all core.sshCommand || true
+          git submodule foreach --recursive 'git config --local --unset-all core.sshCommand || true'
 
       - name: Verify Template Structure
         run: |
-          echo "Repository structure verification..."
-          # (Keep previous template verification steps here)
+          echo "Checking template directory..."
+          if [ ! -d "template" ]; then
+            echo "::error::Missing template directory"
+            exit 1
+          fi
+          ls -la template/
 
-      # Rest of your existing steps remain unchanged
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -44,17 +43,45 @@ jobs:
           pip install -r requirements.txt
           pip install gunicorn
 
-      - name: Start Flask App
+      - name: Start Flask Server
         run: |
-          # (Keep existing app startup commands)
+          echo "Starting application..."
+          nohup gunicorn --bind 0.0.0.0:5000 app:app > server.log 2>&1 &
+          
+          echo "Waiting for server..."
+          timeout 120 bash -c '
+            while ! nc -z 127.0.0.1 5000; do
+              sleep 2
+              echo "Checking port 5000..."
+            done'
 
       - name: Run ZAP Scan
         run: |
-          # (Keep existing ZAP commands)
-# Upload Scan Report
+          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
+          tar -xvf ZAP_2.14.0_Linux.tar.gz
+          chmod +x ZAP_2.14.0/zap.sh
+          
+          # Generate report with consistent filename
+          ZAP_2.14.0/zap.sh -cmd \
+            -quickurl http://127.0.0.1:5000 \
+            -quickout zap_report.html \
+            -autorun .zap/scan_policy.yml
+
+          # Verify report creation
+          if [ ! -f "zap_report.html" ]; then
+            echo "::error::ZAP scan failed to generate report"
+            exit 1
+          fi
+
       - name: Upload Security Report
         uses: actions/upload-artifact@v4
         with:
-          name: zap-security-scan-report
-          path: zap_report.html
-          retention-days: 7  # Automatically delete after 1 week
+          name: zap-scan-results
+          path: 
+            - zap_report.html
+          retention-days: 7
+
+      - name: Cleanup
+        run: |
+          pkill -f gunicorn
+          rm -rf ZAP_2.14.0*
