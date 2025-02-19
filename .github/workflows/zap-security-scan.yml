@@ -13,43 +13,6 @@ jobs:
 
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Clean Temporary Files
-        run: |
-          find . -type f \( -name "*.pyc" -o -name "*.db" -o -name "*.d.html" \) -delete
-          rm -rf Templates/__pycache__
-
-      - name: Verify Template Structure
-        run: |
-          echo "📂 Actual Repository Structure:"
-          tree -L 3
-          
-          echo -e "\n🔍 Validating Templates:"
-          required_templates=(
-            "home.html"
-            "login.html"
-            "register.html"
-            "profile.html"
-            "settings.html"
-            "forgot_password.html"
-          )
-          
-          # Verify directory exists
-          if [ ! -d "Templates" ]; then
-            echo "::error::Missing Templates directory"
-            exit 1
-          fi
-          
-          # Check template files
-          for template in "${required_templates[@]}"; do
-            if [ ! -f "Templates/${template}" ]; then
-              echo "::error file=Templates/${template}::Missing template: ${template}"
-              exit 1
-            fi
-            echo "✅ Valid: Templates/${template}"
-          done
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -63,19 +26,22 @@ jobs:
 
       - name: Start Flask App
         run: |
-          nohup gunicorn --bind 0.0.0.0:5000 app:app > flask.log 2>&1 &
-          timeout 60 bash -c 'while ! curl -s http://127.0.0.1:5000 >/dev/null; do sleep 2; done'
+          nohup python app.py & 
+          sleep 15
 
-      - name: Run Security Scan
+      - name: Download OWASP ZAP
         run: |
           wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
           tar -xvf ZAP_2.14.0_Linux.tar.gz
-          ./ZAP_2.14.0/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout report.html
+          mv ZAP_2.14.0 zap
+          chmod +x zap/zap.sh
 
-      - name: Upload Results
+      - name: Run ZAP Scan
+        run: |
+          zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout report.html
+
+      - name: Upload Report
         uses: actions/upload-artifact@v4
         with:
-          name: security-report
-          path: |
-            report.html
-            flask.log
+          name: zap-report
+          path: report.html
