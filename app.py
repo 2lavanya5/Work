@@ -11,7 +11,8 @@ from wtforms.validators import DataRequired, Email, Length, EqualTo
 from sqlalchemy.exc import IntegrityError
 from forms import LoginForm, RegistrationForm
 from forms import ProfileForm  # Import ProfileForm
-
+from flask import Flask
+app = Flask(__name__, template_folder='template')  # Match directory name
 
 # Initialize Flask app
 app = Flask(__name__)
