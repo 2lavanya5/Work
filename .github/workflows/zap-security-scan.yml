@@ -3,35 +3,29 @@ name: OWASP ZAP Security Scan
 on:
   push:
     branches:
-      - main  # Runs when code is pushed to main
+      - main
   pull_request:
     branches:
-      - main  # Runs when a PR is opened against main
-  workflow_dispatch: # Allows manual triggering
+      - main
+  schedule:
+    - cron: '0 12 * * 1'  # Runs every Monday at 12 PM UTC
 
 jobs:
   zap_scan:
-    name: OWASP ZAP Full Scan
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3  # Checks out the latest code
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Start Web Application
-        run: |
-          docker-compose up -d  # Start the app using Docker (if applicable)
-          sleep 15  # Give time for the app to start
-
-      - name: Run OWASP ZAP Full Scan
-        uses: zaproxy/action-full-scan@v0.3.0
+      - name: Start OWASP ZAP Security Scan
+        uses: zaproxy/action-full-scan@v0.7.0
         with:
-          target: "http://127.0.0.1:5000"  # Replace with your web app URL
-          token: ${{ secrets.GITHUB_TOKEN }}  # GitHub authentication token
-          rules_file_name: ".zap/rules.tsv"  # Optional: Define custom security rules
-
-      - name: Upload ZAP Scan Report
+          target: 'http://127.0.0.1:5000' # Change this to your deployed URL
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+      
+      - name: Upload ZAP Report
         uses: actions/upload-artifact@v3
         with:
-          name: ZAP-Scan-Report
-          path: report.html  # Saves scan results for later review
+          name: ZAP-Report
+          path: report_html.html
