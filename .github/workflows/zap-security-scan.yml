@@ -15,7 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4  
+        uses: actions/checkout@v4  # Use latest version
+
+      - name: Authenticate to GitHub Container Registry
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -24,27 +27,20 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; else echo "No requirements.txt found"; fi
+          pip install -r requirements.txt  # Ensure all dependencies are installed
 
       - name: Start Flask App
         run: |
-          nohup python app.py &  
-          sleep 20  
-
-      - name: Authenticate to GitHub Container Registry
-        run: |
-          echo "${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}" | docker login ghcr.io -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
-
-      - name: Pull OWASP ZAP Docker Image
-        run: docker pull ghcr.io/zaproxy/zaproxy:stable
+          nohup python app.py &  # Start Flask app in background
+          sleep 15  # Wait for app to start
 
       - name: Run OWASP ZAP Scan
         uses: zaproxy/action-full-scan@v0.4.0
         with:
-          target: 'http://127.0.0.1:5000'  
+          target: 'http://127.0.0.1:5000'  # Adjust to your app URL
 
       - name: Upload ZAP Report
-        uses: actions/upload-artifact@v4  
+        uses: actions/upload-artifact@v4  # Updated to v4
         with:
           name: zap-report
-          path: report_html.html
+          path: report.html
