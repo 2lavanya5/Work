@@ -16,7 +16,7 @@ jobs:
     steps:
 
       - name: Checkout Repository
-        uses: actions/checkout@v4  # Latest version
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -25,22 +25,27 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install -r requirements.txt  # Ensure dependencies are installed
+          pip install -r requirements.txt
+
+      - name: Install Java (ZAP dependency)
+        run: sudo apt-get install -y openjdk-11-jdk  # ZAP requires Java
 
       - name: Start Flask App
         run: |
-          nohup python app.py &  # Start Flask app in background
-          sleep 15  # Wait for app to start
+          nohup python app.py > flask.log 2>&1 &  # Redirect output to a log file
+          echo "Waiting for Flask app to start..."
+          timeout 60 bash -c 'while ! curl -s http://127.0.0.1:5000 >/dev/null; do sleep 1; done'  # Wait up to 60s
 
-      - name: Download OWASP ZAP Manually (Latest Version)
+      - name: Download OWASP ZAP
         run: |
           wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
           tar -xvf ZAP_2.14.0_Linux.tar.gz
-          mv ZAP_2.14.0 zap  # Rename folder for easy use
+          mv ZAP_2.14.0 zap
+          chmod +x zap/zap.sh  # Ensure execute permission
 
       - name: Run OWASP ZAP CLI Scan
         run: |
-          zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html
+          zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html -autorun /zap/wrk/automation_plan.yml
           echo "ZAP Scan Completed"
 
       - name: Upload ZAP Report
