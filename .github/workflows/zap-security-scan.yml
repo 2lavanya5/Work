@@ -15,18 +15,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4  # Update checkout action to latest v4
+        uses: actions/checkout@v4
+
+      - name: Start Flask App  # Ensure your app is running
+        run: |
+          nohup python app.py &  # Adjust this based on your app
+
+      - name: Pull OWASP ZAP Docker Image  # Ensures latest version
+        run: docker pull owasp/zap2docker-stable
 
       - name: Start OWASP ZAP Scan
         uses: zaproxy/action-full-scan@v0.4.0
         with:
-          target: 'http://127.0.0.1:5000'  # Change this to your app URL
+          target: 'http://127.0.0.1:5000'  # Update if needed
+          docker_name: 'owasp/zap2docker-stable'
+          pull: true
 
-      - name: Upload ZAP Report   # Correct indentation
+      - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
           name: zap-report
           path: report.html
-
-
-
