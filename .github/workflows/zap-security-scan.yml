@@ -5,33 +5,24 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  schedule:
-    - cron: '0 0 * * *'  # Daily scan
 
 jobs:
   zap_scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     steps:
 
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Configure Git Safety
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git config --local --unset-all http.https://github.com/.extraheader || :
 
       - name: Verify Template Structure
         run: |
-          echo "🔍 Repository Structure:"
-          tree -I '*.pyc|__pycache__|*.db' -L 3
+          echo "📂 Actual Repository Structure:"
+          tree -L 3
           
-          echo -e "\n📂 Checking Templates:"
-          declare -a required_templates=(
+          echo -e "\n🔍 Checking Templates in 'Template' directory:"
+          required_templates=(
             "home.html"
             "login.html"
             "register.html"
@@ -40,85 +31,36 @@ jobs:
           )
           
           for template in "${required_templates[@]}"; do
-            if [ ! -f "templates/$template" ]; then
-              echo "::error file=templates/$template::Missing template: $template"
+            if [ ! -f "Template/${template}" ]; then
+              echo "::error file=Template/${template}::Missing template: ${template}"
               exit 1
             fi
-            echo "✅ Found: templates/$template"
+            echo "✅ Found: Template/${template}"
           done
 
-      - name: Set up Python 3.10
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-          cache: 'pip'
-
-      - name: Clean Python Cache
-        run: |
-          find . -type d -name "__pycache__" -exec rm -rf {} +
-          find . -type f -name "*.pyc" -delete
 
       - name: Install Dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install gunicorn
 
-      - name: Install Java 17
-        run: sudo apt-get install -y openjdk-17-jdk
-
-      - name: Start Flask Application
+      - name: Start Flask App
         run: |
-          echo "🚀 Starting Flask app..."
-          nohup gunicorn --bind 0.0.0.0:5000 \
-            --access-logfile gunicorn-access.log \
-            --error-logfile gunicorn-error.log \
-            app:app > flask.log 2>&1 &
-          
-          echo "⏳ Waiting for app startup..."
-          timeout 120 bash -c '
-            while ! nc -z 127.0.0.1 5000;
-            do
-              sleep 2
-              echo -n "."
-            done'
-          
-          echo -e "\n🔍 Application Status:"
-          curl -sSf http://127.0.0.1:5000/health || :
-          echo -e "\n📋 Startup Logs:"
-          tail -n 20 flask.log
+          nohup gunicorn --bind 0.0.0.0:5000 app:app > flask.log 2>&1 &
+          timeout 60 bash -c 'while ! curl -s http://127.0.0.1:5000 >/dev/null; do sleep 2; done'
 
-      - name: Download OWASP ZAP
+      - name: Run ZAP Scan
         run: |
-          wget -q --show-progress \
-            https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
-          tar -xzf ZAP_2.14.0_Linux.tar.gz
-          mv ZAP_2.14.0 zap
-          chmod +x zap/zap.sh
+          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
+          tar -xvf ZAP_2.14.0_Linux.tar.gz
+          ./ZAP_2.14.0/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout report.html
 
-      - name: Run Security Scan
-        run: |
-          echo "🔒 Starting ZAP Scan..."
-          zap/zap.sh -cmd \
-            -quickurl http://127.0.0.1:5000 \
-            -quickprogress \
-            -quickout zap_report.html \
-            -autorun .zap/automation_plan.yml
-          
-          echo "🔄 Converting to PDF..."
-          wkhtmltopdf --enable-local-file-access zap_report.html zap_report.pdf
-
-      - name: Upload Artifacts
+      - name: Upload Report
         uses: actions/upload-artifact@v4
         with:
-          name: security-reports-${{ github.run_id }}
-          path: |
-            zap_report.*
-            flask.log
-            gunicorn-*.log
-          retention-days: 7
-
-      - name: Cleanup
-        run: |
-          pkill -f gunicorn || :
-          rm -rf zap/ ZAP_*.tar.gz
+          name: security-report
+          path: report.html
