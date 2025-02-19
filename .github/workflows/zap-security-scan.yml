@@ -36,19 +36,13 @@ jobs:
         run: |
           echo "${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
 
-      - name: Install OWASP ZAP Manually
+      - name: Run OWASP ZAP using Docker
         run: |
-          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
-          tar -xvzf ZAP_2.14.0_Linux.tar.gz
-          mv ZAP_2.14.0 zaproxy
-          chmod +x zaproxy/zap.sh
-
-      - name: Run OWASP ZAP Scan
-        run: |
-          ./zaproxy/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout ~/zap_report.html
+          docker pull owasp/zap2docker-stable
+          docker run --rm -t owasp/zap2docker-stable zap-full-scan.py -t http://127.0.0.1:5000 -r zap_report.html
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
           name: zap-report
-          path: ~/zap_report.html
+          path: zap_report.html
