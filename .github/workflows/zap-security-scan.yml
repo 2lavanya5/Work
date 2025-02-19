@@ -32,23 +32,15 @@ jobs:
           nohup python app.py &  # Start Flask app in background
           sleep 15  # Wait for app to start
 
-      - name: Install Homebrew (Required for ZAP)
+      - name: Download OWASP ZAP Manually (Latest Version)
         run: |
-          sudo apt update
-          sudo apt install -y curl git
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
-          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew update
-
-      - name: Install OWASP ZAP via Homebrew
-        run: |
-          brew install owasp-zap
-          zap -version  # Verify installation
+          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
+          tar -xvf ZAP_2.14.0_Linux.tar.gz
+          mv ZAP_2.14.0 zap  # Rename folder for easy use
 
       - name: Run OWASP ZAP CLI Scan
         run: |
-          zap -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html
+          zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html
           echo "ZAP Scan Completed"
 
       - name: Upload ZAP Report
