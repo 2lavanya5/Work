@@ -3,60 +3,61 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_mail import Mail, Message
-import secrets
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, EqualTo
 from sqlalchemy.exc import IntegrityError
-from forms import LoginForm, RegistrationForm
-from forms import ProfileForm  # Import ProfileForm
-from flask import Flask
-app = Flask(__name__, template_folder='template')  # Match directory name
+import secrets
+import os
+
+# Import forms correctly
+from forms import LoginForm, RegistrationForm, ProfileForm  
 
 # Initialize Flask app
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates")  # Ensure correct folder
+
+# Security and configuration
 csrf = CSRFProtect(app)
+app.config.from_object("config.Config")  # Load configurations from `config.py`
 
-# Load configurations
-app.config.from_object("config.Config")
-
-# ✅ Initialize database directly, instead of calling db.init_app(app) later
+# Database setup
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 mail = Mail(app)
 
+# Ensure session security
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+# User loader for Flask-Login
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Forms
-class LoginForm(FlaskForm):
-    email = StringField("Email", validators=[DataRequired(), Email()])
-    password = PasswordField("Password", validators=[DataRequired(), Length(min=6)])
-    submit = SubmitField("Login")
-    
-class RegistrationForm(FlaskForm):
-    username = StringField("Username", validators=[DataRequired(), Length(min=3, max=20)])
-    email = StringField("Email", validators=[DataRequired(), Email()])
-    password = PasswordField("Password", validators=[DataRequired(), Length(min=6)])
-    confirm_password = PasswordField("Confirm Password", validators=[DataRequired(), EqualTo('password')])
-    submit = SubmitField("Register")
-
-# Models
+# Database Model
 class User(db.Model, UserMixin):
-    __tablename__ = 'users'
+    __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
 
+# Utility function for password reset token
+def generate_reset_token():
+    return secrets.token_urlsafe(32)
+
+# ✅ Ensure the database is created before running the app
+with app.app_context():
+    db.create_all()
+
 # Routes
 @app.route("/")
 def home():
-    return render_template("home.html")
+    return render_template("home.html")  # Ensure this file exists in `templates/`
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -69,7 +70,7 @@ def register():
         # Check if user already exists
         existing_user = User.query.filter_by(email=email).first()
         if existing_user:
-            flash("Email already registered. Try logging in or reset your password.", "danger")
+            flash("Email already registered. Try logging in.", "danger")
             return redirect(url_for("login"))
 
         hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
@@ -99,21 +100,21 @@ def login():
             login_user(user)
             next_page = request.args.get("next")  # Preserve next URL if it exists
             flash("Login successful!", "success")
-            return redirect(next_page) if next_page else redirect(url_for("dashboard"))  # Redirects correctly
+            return redirect(next_page) if next_page else redirect(url_for("dashboard"))
         else:
             flash("Login failed. Check your email and password.", "danger")
     
     return render_template("login.html", form=form)
 
-@app.route("/settings", methods=["GET", "POST"])
-@login_required
-def settings():
-    return render_template("settings.html", user=current_user)
-
 @app.route("/dashboard")
 @login_required
 def dashboard():
     return render_template("dashboard.html", user=current_user)
+
+@app.route("/settings", methods=["GET", "POST"])
+@login_required
+def settings():
+    return render_template("settings.html", user=current_user)
 
 @app.route("/forgot_password", methods=["GET", "POST"])
 def forgot_password():
@@ -132,6 +133,21 @@ def forgot_password():
 
     return render_template("forgot_password.html")
 
+@app.route("/reset_password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    if request.method == "POST":
+        password = request.form["password"]
+        user = User.query.filter_by(reset_token=token).first()
+        if user:
+            user.password = bcrypt.generate_password_hash(password).decode("utf-8")
+            db.session.commit()
+            flash("Password updated! Please log in.", "success")
+            return redirect(url_for("login"))
+        else:
+            flash("Invalid or expired token!", "danger")
+            return redirect(url_for("forgot_password"))
+
+    return render_template("reset_password.html", token=token)
 
 @app.route("/logout")
 @login_required
@@ -156,15 +172,9 @@ def profile():
         flash("Profile updated successfully!", "success")
         return redirect(url_for("profile"))
 
-    return render_template("profile.html", user=current_user, form=form)  # Pass form
+    return render_template("profile.html", user=current_user, form=form)
 
-# Secure session settings
-app.config["SESSION_COOKIE_SECURE"] = True
-app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-
+# Start Flask App
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()  # Ensure database tables are created
-        print("Database initialized successfully!")
-    app.run(debug=True, port=5000)
+    print("Starting Flask app...")  # Debugging startup messages
+    app.run(debug=True, host="0.0.0.0", port=5000)
