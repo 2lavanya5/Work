@@ -11,12 +11,12 @@ from sqlalchemy.exc import IntegrityError
 import secrets
 import os
 
+
 # Import forms correctly
 from forms import LoginForm, RegistrationForm, ProfileForm  
 
 # Initialize Flask app
-app = Flask(__name__, template_folder="templates")  # Ensure correct folder
-
+app = Flask(__name__, template_folder="Templates")  # Ensure correct folder
 # Security and configuration
 csrf = CSRFProtect(app)
 app.config.from_object("config.Config")  # Load configurations from `config.py`
