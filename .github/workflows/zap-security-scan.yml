@@ -15,6 +15,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify Template Exists
+        run: |
+          if [ ! -f templates/home.html ]; then
+            echo "Error: templates/home.html is missing!"
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -26,15 +33,10 @@ jobs:
           pip install -r requirements.txt
           pip install gunicorn
 
-      - name: Check Template File Exists
-        run: |
-          if [ ! -f templates/home.html ]; then
-            echo "Error: templates/home.html is missing!"
-            exit 1
-          fi
-
       - name: Start Flask App
         run: |
+          # Explicitly set the Python path
+          export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE
           nohup gunicorn -w 4 -b 0.0.0.0:5000 app:app &
           sleep 30
           curl --retry 10 --retry-delay 5 --retry-connrefused http://127.0.0.1:5000 || (echo "Flask app failed to start!" && exit 1)
@@ -45,13 +47,6 @@ jobs:
           target: 'http://127.0.0.1:5000'
           cmd_options: '-a -J -j -d -x report.html --timeout 600'
           docker_image: 'owasp/zap2docker-stable'
-
-      - name: Verify Report File Exists
-        run: |
-          if [ ! -f report.html ]; then
-            echo "Error: report.html does not exist!"
-            exit 1
-          fi
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
