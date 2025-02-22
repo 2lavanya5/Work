@@ -17,14 +17,19 @@ app = Flask(__name__, template_folder="templates")
 # Security Configurations
 csrf = CSRFProtect(app)
 
-# ✅ **Fixed Database Path**
+# Database Configuration
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(BASE_DIR, "database.sqlite")
-
-# ✅ **Fixed Configurations**
-app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"  # Use absolute path
+app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = "your_secret_key"
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "your_secret_key")
+
+# Flask-Mail Configuration
+app.config["MAIL_SERVER"] = "smtp.example.com"
+app.config["MAIL_PORT"] = 587
+app.config["MAIL_USE_TLS"] = True
+app.config["MAIL_USERNAME"] = "your-email@example.com"
+app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD")
 
 # Initialize Extensions
 db = SQLAlchemy(app)
@@ -33,17 +38,10 @@ login_manager = LoginManager(app)
 login_manager.login_view = "login"
 mail = Mail(app)
 
-# ✅ Ensure Session Security
+# Session Security
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-
-# ✅ **Fix Database Not Found Issue**
-if not os.path.exists(DB_PATH):
-    print("📌 Database file not found! Creating a new one...")
-    with app.app_context():
-        db.create_all()
-        print("✅ Database initialized successfully!")
 
 # User Loader
 @login_manager.user_loader
@@ -59,14 +57,32 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String(255), nullable=False)
     reset_token = db.Column(db.String(255), nullable=True)
 
-# Utility function for password reset token
-def generate_reset_token():
-    return secrets.token_urlsafe(32)
+# Forms
+class RegistrationForm(FlaskForm):
+    username = StringField("Username", validators=[DataRequired(), Length(min=4, max=50)])
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    password = PasswordField("Password", validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField("Confirm Password", validators=[DataRequired(), EqualTo("password")])
+    submit = SubmitField("Register")
+
+class LoginForm(FlaskForm):
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    password = PasswordField("Password", validators=[DataRequired()])
+    submit = SubmitField("Login")
+
+class ResetPasswordRequestForm(FlaskForm):
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    submit = SubmitField("Request Password Reset")
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField("Password", validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField("Confirm Password", validators=[DataRequired(), EqualTo("password")])
+    submit = SubmitField("Reset Password")
 
 # Routes
 @app.route("/")
 def home():
-    return render_template("home.html")  # Ensure this file exists
+    return render_template("home.html")
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -76,7 +92,6 @@ def register():
         email = form.email.data.strip()
         password = form.password.data
 
-        # Check if user already exists
         existing_user = User.query.filter_by(email=email).first()
         if existing_user:
             flash("Email already registered. Try logging in.", "danger")
@@ -126,12 +141,66 @@ def logout():
     flash("Logged out successfully.", "info")
     return redirect(url_for("home"))
 
-# ✅ **Fix Gunicorn Crashes Due to DB Issues**
+@app.route("/reset_password", methods=["GET", "POST"])
+def reset_password():
+    form = ResetPasswordRequestForm()
+    if form.validate_on_submit():
+        email = form.email.data
+        user = User.query.filter_by(email=email).first()
+        if user:
+            token = generate_reset_token()
+            user.reset_token = token
+            db.session.commit()
+            send_reset_email(user)
+            flash("Password reset instructions have been sent to your email.", "info")
+            return redirect(url_for("login"))
+        else:
+            flash("Email not found.", "danger")
+    return render_template("reset_password.html", form=form)
+
+@app.route("/reset_password/<token>", methods=["GET", "POST"])
+def reset_password_token(token):
+    user = User.query.filter_by(reset_token=token).first()
+    if not user:
+        flash("Invalid or expired token.", "danger")
+        return redirect(url_for("reset_password"))
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        hashed_password = bcrypt.generate_password_hash(form.password.data).decode("utf-8")
+        user.password = hashed_password
+        user.reset_token = None
+        db.session.commit()
+        flash("Your password has been reset!", "success")
+        return redirect(url_for("login"))
+    return render_template("reset_password_token.html", form=form)
+
+def send_reset_email(user):
+    token = user.reset_token
+    msg = Message("Password Reset Request", sender="noreply@example.com", recipients=[user.email])
+    msg.body = f"""To reset your password, visit the following link:
+{url_for("reset_password_token", token=token, _external=True)}
+
+If you did not make this request, please ignore this email.
+"""
+    mail.send(msg)
+
+# Error Handlers
+@app.errorhandler(404)
+def page_not_found(error):
+    return render_template("404.html"), 404
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    return render_template("500.html"), 500
+
+# Start Flask App
 if __name__ == "__main__":
     print("📌 Starting Flask app...")
 
-    # Ensure the database is accessible before starting the app
     with app.app_context():
-        db.create_all()
+        if not os.path.exists(DB_PATH):
+            print("📌 Database file not found! Creating a new one...")
+            db.create_all()
+            print("✅ Database initialized successfully!")
     
     app.run(debug=True, host="0.0.0.0", port=5000)
