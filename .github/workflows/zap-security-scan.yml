@@ -15,7 +15,11 @@ jobs:
 
       - name: Check Directory Structure
         run: |
+          # Rename directory to lowercase for Flask compatibility
+          mv Templates templates || true
+          echo "--- Directory Structure ---"
           ls -la
+          echo "--- Templates Content ---"
           ls -la templates/
 
       - name: Set up Python
