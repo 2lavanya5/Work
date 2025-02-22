@@ -49,7 +49,7 @@ jobs:
 
       - name: Download OWASP ZAP
         run: |
-          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
+          curl -L -o ZAP_2.14.0_Linux.tar.gz https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
           tar -xvf ZAP_2.14.0_Linux.tar.gz
           mv ZAP_2.14.0 zap
           chmod +x zap/zap.sh
