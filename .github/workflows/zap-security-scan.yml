@@ -44,10 +44,38 @@ jobs:
           pip install -r requirements.txt
           pip install gunicorn
 
-      - name: Start Flask App
+name: Start Flask App
         run: |
-          # (Keep existing app startup commands)
+          echo "Starting Flask application..."
+          nohup gunicorn --bind 0.0.0.0:5000 --access-logfile gunicorn.log app:app > flask.log 2>&1 &
+          
+          echo "Waiting for app to start..."
+          timeout 120 bash -c '
+            while ! nc -z 127.0.0.1 5000;
+            do 
+              sleep 2
+              echo "Waiting for port 5000..."
+            done'
+          
+          echo "App status check:"
+          curl -v http://127.0.0.1:5000
+
+      - name: Download OWASP ZAP
+        run: |
+          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
+          tar -xvf ZAP_2.14.0_Linux.tar.gz
+          mv ZAP_2.14.0 zap
+          chmod +x zap/zap.sh
 
       - name: Run ZAP Scan
         run: |
-          # (Keep existing ZAP commands)
+          zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html
+
+      - name: Upload Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            zap_report.html
+            flask.log
+            gunicorn.log
