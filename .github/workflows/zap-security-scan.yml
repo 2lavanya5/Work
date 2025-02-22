@@ -33,7 +33,7 @@ jobs:
           nohup gunicorn --bind 0.0.0.0:5000 --access-logfile gunicorn.log --error-logfile flask.log app:app > /dev/null 2>&1 &
           
           echo "Waiting for app to start..."
-          timeout 60 bash -c '
+          timeout 120 bash -c '
             while ! curl -s http://127.0.0.1:5000; do
               sleep 2
               echo "Waiting for app..."
@@ -51,7 +51,7 @@ jobs:
       - name: Run ZAP Scan with Docker
         run: |
           echo "Running OWASP ZAP Scan..."
-          docker run -v $(pwd):/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+          docker run --user root -v $(pwd):/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
             -t http://127.0.0.1:5000 \
             -r zap_report.html
 
