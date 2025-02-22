@@ -10,54 +10,52 @@ jobs:
   zap_scan:
     runs-on: ubuntu-latest
     steps:
+      # Step 1: Checkout the repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Check Directory Structure
-        run: |
-          # Rename directory to lowercase for Flask compatibility
-          mv Templates templates || true
-          echo "--- Directory Structure ---"
-          ls -la
-          echo "--- Templates Content ---"
-          ls -la templates/
-
+      # Step 2: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
+      # Step 3: Install Python dependencies
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
           pip install gunicorn
 
+      # Step 4: Start Flask application
       - name: Start Flask App
         run: |
-          pkill -f gunicorn || true
-          nohup gunicorn --bind 0.0.0.0:5000 --access-logfile gunicorn.log --error-logfile flask.log app:app &
+          echo "Starting Flask application..."
+          nohup gunicorn --bind 0.0.0.0:5000 --access-logfile gunicorn.log --error-logfile flask.log app:app > /dev/null 2>&1 &
+          
+          echo "Waiting for app to start..."
           timeout 60 bash -c '
             while ! curl -s http://127.0.0.1:5000; do
               sleep 2
               echo "Waiting for app..."
             done'
 
+      # Step 5: Debug Flask logs (optional, for troubleshooting)
       - name: Debug Flask Logs
         run: |
+          echo "----- Flask Log -----"
           cat flask.log
+          echo "----- Gunicorn Log -----"
           cat gunicorn.log
 
-      - name: Download OWASP ZAP
+      # Step 6: Run OWASP ZAP Scan using Docker
+      - name: Run ZAP Scan with Docker
         run: |
-          curl -L -o ZAP_2.14.0_Linux.tar.gz https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
-          tar -xvf ZAP_2.14.0_Linux.tar.gz
-          mv ZAP_2.14.0 zap
-          chmod +x zap/zap.sh
+          echo "Running OWASP ZAP Scan..."
+          docker run -v $(pwd):/zap/wrk -t owasp/zap2docker-stable zap-baseline.py \
+            -t http://127.0.0.1:5000 \
+            -r zap_report.html
 
-      - name: Run ZAP Scan
-        run: |
-          zap/zap.sh -cmd -quickurl http://127.0.0.1:5000 -quickout zap_report.html
-
+      # Step 7: Upload ZAP scan report and logs as artifacts
       - name: Upload Reports
         uses: actions/upload-artifact@v4
         with:
