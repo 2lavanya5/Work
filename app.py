@@ -1,3 +1,5 @@
+import os
+import secrets
 from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
@@ -8,31 +10,42 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, EqualTo
 from sqlalchemy.exc import IntegrityError
-import secrets
-import os
 
 # Initialize Flask app
-app = Flask(__name__, template_folder="templates")  # Ensure correct folder name (case-sensitive on Linux)
+app = Flask(__name__, template_folder="templates")
 
-# Security and configuration
+# Security Configurations
 csrf = CSRFProtect(app)
 
-# Load configurations from `config.py`
-app.config.from_object("config.Config")
+# ✅ **Fixed Database Path**
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+DB_PATH = os.path.join(BASE_DIR, "database.sqlite")
 
-# Database setup
+# ✅ **Fixed Configurations**
+app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"  # Use absolute path
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SECRET_KEY"] = "your_secret_key"
+
+# Initialize Extensions
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 mail = Mail(app)
 
-# Ensure session security
+# ✅ Ensure Session Security
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-# User loader for Flask-Login
+# ✅ **Fix Database Not Found Issue**
+if not os.path.exists(DB_PATH):
+    print("📌 Database file not found! Creating a new one...")
+    with app.app_context():
+        db.create_all()
+        print("✅ Database initialized successfully!")
+
+# User Loader
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -44,39 +57,16 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(50), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
-    reset_token = db.Column(db.String(255), nullable=True)  # Add reset_token field
-
-# Forms
-class LoginForm(FlaskForm):
-    email = StringField("Email", validators=[DataRequired(), Email()])
-    password = PasswordField("Password", validators=[DataRequired(), Length(min=6)])
-    submit = SubmitField("Login")
-    
-class RegistrationForm(FlaskForm):
-    username = StringField("Username", validators=[DataRequired(), Length(min=3, max=20)])
-    email = StringField("Email", validators=[DataRequired(), Email()])
-    password = PasswordField("Password", validators=[DataRequired(), Length(min=6)])
-    confirm_password = PasswordField("Confirm Password", validators=[DataRequired(), EqualTo('password')])
-    submit = SubmitField("Register")
-
-class ProfileForm(FlaskForm):
-    username = StringField("Username", validators=[DataRequired(), Length(min=3, max=20)])
-    email = StringField("Email", validators=[DataRequired(), Email()])
-    password = PasswordField("New Password", validators=[Length(min=6)])
-    submit = SubmitField("Update Profile")
+    reset_token = db.Column(db.String(255), nullable=True)
 
 # Utility function for password reset token
 def generate_reset_token():
     return secrets.token_urlsafe(32)
 
-# Ensure the database is created before running the app
-with app.app_context():
-    db.create_all()
-
 # Routes
 @app.route("/")
 def home():
-    return render_template("home.html")  # Ensure this file exists in `templates/`
+    return render_template("home.html")  # Ensure this file exists
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -117,9 +107,8 @@ def login():
 
         if user and bcrypt.check_password_hash(user.password, password):
             login_user(user)
-            next_page = request.args.get("next")  # Preserve next URL if it exists
             flash("Login successful!", "success")
-            return redirect(next_page) if next_page else redirect(url_for("dashboard"))
+            return redirect(url_for("dashboard"))
         else:
             flash("Login failed. Check your email and password.", "danger")
     
@@ -130,48 +119,6 @@ def login():
 def dashboard():
     return render_template("dashboard.html", user=current_user)
 
-@app.route("/settings", methods=["GET", "POST"])
-@login_required
-def settings():
-    return render_template("settings.html", user=current_user)
-
-@app.route("/forgot_password", methods=["GET", "POST"])
-def forgot_password():
-    if request.method == "POST":
-        email = request.form["email"]
-        user = User.query.filter_by(email=email).first()
-     
-        if user:
-            token = generate_reset_token()
-            user.reset_token = token
-            db.session.commit()
-
-            reset_url = url_for("reset_password", token=token, _external=True)
-            msg = Message("Password Reset", sender="your-email@gmail.com", recipients=[email])
-            msg.body = f"Click the link to reset your password: {reset_url}"
-            mail.send(msg)
-            flash("Password reset link sent to your email!", "info")
-            return redirect(url_for("login"))
-
-    return render_template("forgot_password.html")
-
-@app.route("/reset_password/<token>", methods=["GET", "POST"])
-def reset_password(token):
-    user = User.query.filter_by(reset_token=token).first()
-    if not user:
-        flash("Invalid or expired token!", "danger")
-        return redirect(url_for("forgot_password"))
-
-    if request.method == "POST":
-        password = request.form["password"]
-        user.password = bcrypt.generate_password_hash(password).decode("utf-8")
-        user.reset_token = None  # Clear the reset token
-        db.session.commit()
-        flash("Password updated! Please log in.", "success")
-        return redirect(url_for("login"))
-
-    return render_template("reset_password.html", token=token)
-
 @app.route("/logout")
 @login_required
 def logout():
@@ -179,25 +126,12 @@ def logout():
     flash("Logged out successfully.", "info")
     return redirect(url_for("home"))
 
-@app.route("/profile", methods=["GET", "POST"])
-@login_required
-def profile():
-    form = ProfileForm()  # Create form instance
-    
-    if form.validate_on_submit():  # Check form submission
-        current_user.username = form.username.data.strip()
-        current_user.email = form.email.data.strip()
-
-        if form.password.data:
-            current_user.password = bcrypt.generate_password_hash(form.password.data).decode("utf-8")
-
-        db.session.commit()
-        flash("Profile updated successfully!", "success")
-        return redirect(url_for("profile"))
-
-    return render_template("profile.html", user=current_user, form=form)
-
-# Start Flask App
+# ✅ **Fix Gunicorn Crashes Due to DB Issues**
 if __name__ == "__main__":
-    print("Starting Flask app...")  # Debugging startup messages
+    print("📌 Starting Flask app...")
+
+    # Ensure the database is accessible before starting the app
+    with app.app_context():
+        db.create_all()
+    
     app.run(debug=True, host="0.0.0.0", port=5000)
