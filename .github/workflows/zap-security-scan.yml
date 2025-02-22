@@ -51,7 +51,7 @@ jobs:
       - name: Run ZAP Scan with Docker
         run: |
           echo "Running OWASP ZAP Scan..."
-          docker run -v $(pwd):/zap/wrk -t owasp/zap2docker-stable zap-baseline.py \
+          docker run -v $(pwd):/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
             -t http://127.0.0.1:5000 \
             -r zap_report.html
 
