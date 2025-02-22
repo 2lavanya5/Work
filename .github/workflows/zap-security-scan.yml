@@ -26,21 +26,27 @@ jobs:
           pip install -r requirements.txt
           pip install gunicorn
 
-      # Step 4: Start Flask application in Docker
+      # Step 4: Kill Existing Processes on Port 5000
+      - name: Kill Existing Processes on Port 5000
+        run: |
+          echo "Killing processes on port 5000..."
+          sudo lsof -i :5000 -t | xargs -r sudo kill -9
+
+      # Step 5: Start Flask application in Docker
       - name: Start Flask App in Docker
         run: |
           echo "Starting Flask application in Docker..."
           docker run -d --name flask-app -p 5000:5000 -v $(pwd):/app -w /app python:3.10-slim \
-            sh -c "pip install gunicorn && gunicorn --bind 0.0.0.0:5000 --access-logfile gunicorn.log --error-logfile flask.log app:app"
+            sh -c "pip install -r requirements.txt && gunicorn --bind 0.0.0.0:5000 --access-logfile gunicorn.log --error-logfile flask.log app:app"
           
           echo "Waiting for app to start..."
-          timeout 120 bash -c '
+          timeout 180 bash -c '
             while ! curl -s http://127.0.0.1:5000; do
               sleep 2
               echo "Waiting for app..."
             done'
 
-      # Step 5: Debug Flask logs
+      # Step 6: Debug Flask logs
       - name: Debug Flask Logs
         run: |
           echo "----- Flask Log -----"
@@ -48,7 +54,13 @@ jobs:
           echo "----- Gunicorn Log -----"
           docker exec flask-app cat gunicorn.log
 
-      # Step 6: Run OWASP ZAP Scan using Docker
+      # Step 7: Verify Database
+      - name: Verify Database
+        run: |
+          echo "Checking database file..."
+          ls -l database.sqlite
+
+      # Step 8: Run OWASP ZAP Scan using Docker
       - name: Run ZAP Scan with Docker
         run: |
           echo "Running OWASP ZAP Scan..."
@@ -56,7 +68,7 @@ jobs:
             -t http://flask-app:5000 \
             -r zap_report.html
 
-      # Step 7: Upload ZAP scan report and logs as artifacts
+      # Step 9: Upload ZAP scan report and logs as artifacts
       - name: Upload Reports
         uses: actions/upload-artifact@v4
         with:
