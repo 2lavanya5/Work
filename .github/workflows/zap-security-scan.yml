@@ -10,30 +10,14 @@ jobs:
   zap_scan:
     runs-on: ubuntu-latest
     steps:
-
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Configure Git Safety
+      - name: Check Directory Structure
         run: |
-          # Correct safe directory configuration
-          git config --global --add safe.directory /home/runner/work/work/work
-          
-          # Clean up existing configurations
-          git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :
-          git submodule foreach --recursive 'git config --local --name-only --get-regexp "core\.sshCommand" && git config --local --unset-all "core.sshCommand" || :'
-          
-          # Handle HTTP headers cleanup
-          git config --local --name-only --get-regexp 'http\.https:\/\/github\.com\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :
+          ls -la
+          ls -la templates/
 
-      - name: Verify Template Structure
-        run: |
-          echo "Repository structure verification..."
-          # (Keep previous template verification steps here)
-
-      # Rest of your existing steps remain unchanged
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -46,27 +30,24 @@ jobs:
 
       - name: Start Flask App
         run: |
-            echo "Starting Flask application..."
-            nohup gunicorn --bind 0.0.0.0:5000 --access-logfile gunicorn.log --error-logfile flask.log app:app &
-            
-            echo "Waiting for app to start..."
-            timeout 120 bash -c '
-              until curl -s http://127.0.0.1:5000; do
-                sleep 2
-                echo "Waiting for app..."
-              done'
+          pkill -f gunicorn || true
+          nohup gunicorn --bind 0.0.0.0:5000 --access-logfile gunicorn.log --error-logfile flask.log app:app &
+          timeout 60 bash -c '
+            while ! curl -s http://127.0.0.1:5000; do
+              sleep 2
+              echo "Waiting for app..."
+            done'
+
       - name: Debug Flask Logs
         run: |
-          echo "----- Flask Log -----"
           cat flask.log
-          echo "----- Gunicorn Log -----"
           cat gunicorn.log
-    
+
       - name: Download OWASP ZAP
         run: |
-          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2.14.0_Linux.tar.gz
-          tar -xvf ZAP_2.14.0_Linux.tar.gz
-          mv ZAP_2.14.0 zap
+          wget https://github.com/zaproxy/zaproxy/releases/download/v2.14.0/ZAP_2_14_0_Linux.tar.gz
+          tar -xvf ZAP_2_14_0_Linux.tar.gz
+          mv ZAP_2_14_0 zap
           chmod +x zap/zap.sh
 
       - name: Run ZAP Scan
