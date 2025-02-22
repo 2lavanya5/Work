@@ -11,15 +11,14 @@ from sqlalchemy.exc import IntegrityError
 import secrets
 import os
 
-
-# Import forms correctly
-from forms import LoginForm, RegistrationForm, ProfileForm  
-
 # Initialize Flask app
 app = Flask(__name__, template_folder="Templates")  # Ensure correct folder
+
 # Security and configuration
 csrf = CSRFProtect(app)
-app.config.from_object("config.Config")  # Load configurations from `config.py`
+
+# Load configurations from `config.py`
+app.config.from_object("config.Config")
 
 # Database setup
 db = SQLAlchemy(app)
@@ -45,12 +44,13 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(50), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
+    reset_token = db.Column(db.String(255), nullable=True)  # Add reset_token field
 
 # Utility function for password reset token
 def generate_reset_token():
     return secrets.token_urlsafe(32)
 
-# ✅ Ensure the database is created before running the app
+# Ensure the database is created before running the app
 with app.app_context():
     db.create_all()
 
@@ -124,6 +124,9 @@ def forgot_password():
      
         if user:
             token = generate_reset_token()
+            user.reset_token = token
+            db.session.commit()
+
             reset_url = url_for("reset_password", token=token, _external=True)
             msg = Message("Password Reset", sender="your-email@gmail.com", recipients=[email])
             msg.body = f"Click the link to reset your password: {reset_url}"
@@ -135,17 +138,18 @@ def forgot_password():
 
 @app.route("/reset_password/<token>", methods=["GET", "POST"])
 def reset_password(token):
+    user = User.query.filter_by(reset_token=token).first()
+    if not user:
+        flash("Invalid or expired token!", "danger")
+        return redirect(url_for("forgot_password"))
+
     if request.method == "POST":
         password = request.form["password"]
-        user = User.query.filter_by(reset_token=token).first()
-        if user:
-            user.password = bcrypt.generate_password_hash(password).decode("utf-8")
-            db.session.commit()
-            flash("Password updated! Please log in.", "success")
-            return redirect(url_for("login"))
-        else:
-            flash("Invalid or expired token!", "danger")
-            return redirect(url_for("forgot_password"))
+        user.password = bcrypt.generate_password_hash(password).decode("utf-8")
+        user.reset_token = None  # Clear the reset token
+        db.session.commit()
+        flash("Password updated! Please log in.", "success")
+        return redirect(url_for("login"))
 
     return render_template("reset_password.html", token=token)
 
