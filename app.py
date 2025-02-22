@@ -12,7 +12,7 @@ import secrets
 import os
 
 # Initialize Flask app
-app = Flask(__name__, template_folder="Templates")  # Ensure correct folder
+app = Flask(__name__, template_folder="templates")  # Ensure correct folder name (case-sensitive on Linux)
 
 # Security and configuration
 csrf = CSRFProtect(app)
@@ -45,6 +45,25 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     reset_token = db.Column(db.String(255), nullable=True)  # Add reset_token field
+
+# Forms
+class LoginForm(FlaskForm):
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    password = PasswordField("Password", validators=[DataRequired(), Length(min=6)])
+    submit = SubmitField("Login")
+    
+class RegistrationForm(FlaskForm):
+    username = StringField("Username", validators=[DataRequired(), Length(min=3, max=20)])
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    password = PasswordField("Password", validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField("Confirm Password", validators=[DataRequired(), EqualTo('password')])
+    submit = SubmitField("Register")
+
+class ProfileForm(FlaskForm):
+    username = StringField("Username", validators=[DataRequired(), Length(min=3, max=20)])
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    password = PasswordField("New Password", validators=[Length(min=6)])
+    submit = SubmitField("Update Profile")
 
 # Utility function for password reset token
 def generate_reset_token():
