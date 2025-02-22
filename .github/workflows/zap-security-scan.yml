@@ -44,7 +44,7 @@ jobs:
           pip install -r requirements.txt
           pip install gunicorn
 
-name: Start Flask App
+      - name: Start Flask App
         run: |
           echo "Starting Flask application..."
           nohup gunicorn --bind 0.0.0.0:5000 --access-logfile gunicorn.log app:app > flask.log 2>&1 &
